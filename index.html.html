@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>便利貼看板 - Sticky Notes Board</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts: Inter & Caveat for Handwriting style -->
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'Inter', 'sans-serif'],
+            handwriting: ['Caveat', '"Noto Sans TC"', 'cursive'],
+          },
+          boxShadow: {
+            'sticky': '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+            'sticky-hover': '0 20px 30px -10px rgba(0, 0, 0, 0.18), 0 12px 15px -8px rgba(0, 0, 0, 0.12)',
+            'pin': '2px 4px 6px rgba(0,0,0,0.3)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .corkboard-bg {
+      background-color: #2a2d34;
+      background-image: 
+        radial-gradient(#3a3e48 1px, transparent 1px),
+        radial-gradient(#3a3e48 1px, #2a2d34 1px);
+      background-size: 40px 40px;
+      background-position: 0 0, 20px 20px;
+    }
+
+    .light-corkboard-bg {
+      background-color: #f4f2ed;
+      background-image: radial-gradient(#e2dfd7 1.5px, transparent 1.5px);
+      background-size: 24px 24px;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .note-rotate-left { transform: rotate(-1.5deg); }
+    .note-rotate-right { transform: rotate(1.5deg); }
+    .note-rotate-none { transform: rotate(0deg); }
+
+    .note-card {
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+    }
+    .note-card:hover {
+      z-index: 40 !important;
+    }
+
+    .dragging {
+      opacity: 0.85;
+      transform: scale(1.03) rotate(0deg) !important;
+      cursor: grabbing !important;
+      z-index: 100 !important;
+    }
+  </style>
+</head>
+<body class="bg-stone-100 dark:bg-zinc-900 text-stone-800 dark:text-stone-100 font-sans min-h-screen flex flex-col transition-colors duration-300">
+
+  <!-- Top Navigation Header -->
+  <header class="bg-white/80 dark:bg-zinc-800/80 backdrop-blur-md border-b border-stone-200 dark:border-zinc-700 sticky top-0 z-50 px-4 py-3 shadow-sm">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-400 dark:bg-amber-500 text-amber-950 flex items-center justify-center font-bold text-xl shadow-md rotate-[-3deg]">
+          <i class="fa-solid me-0.5 fa-note-sticky"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
+            便利貼看板 <span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 font-medium border border-amber-300 dark:border-amber-700">v2.0</span>
+          </h1>
+          <p class="text-xs text-stone-500 dark:text-stone-400 hidden sm:block">靜態網頁 LocalStorage 儲存 · 支援 GitHub Pages 部署</p>
+        </div>
+      </div>
+
+      <!-- Search & Filter Controls -->
+      <div class="flex items-center gap-2 flex-grow max-w-md mx-2">
+        <div class="relative w-full">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm"></i>
+          <input type="text" id="searchInput" placeholder="搜尋便利貼內容或標籤..." 
+            class="w-full pl-9 pr-8 py-1.5 text-sm bg-stone-100 dark:bg-zinc-700/60 border border-stone-200 dark:border-zinc-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all">
+          <button id="clearSearchBtn" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button id="addNoteBtn" class="flex items-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-stone-900 font-semibold text-sm rounded-lg shadow-md hover:shadow-lg transition-all transform active:scale-95">
+          <i class="fa-solid fa-plus text-base"></i>
+          <span>新增便利貼</span>
+        </button>
+
+        <!-- View Mode Switch -->
+        <button id="viewToggleBtn" title="切換檢視模式 (網格 / 自由排版)" class="p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-zinc-700 rounded-lg transition-colors border border-stone-200 dark:border-zinc-700">
+          <i class="fa-solid fa-border-all text-base" id="viewToggleIcon"></i>
+        </button>
+
+        <!-- GitHub Pages Guide Modal Button -->
+        <button id="openDeployGuideBtn" title="GitHub Pages 部署教學" class="p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-zinc-700 rounded-lg transition-colors border border-stone-200 dark:border-zinc-700">
+          <i class="fa-brands fa-github text-lg"></i>
+        </button>
+
+        <!-- More Options Menu Dropdown -->
+        <div class="relative">
+          <button id="moreMenuBtn" class="p-2 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-zinc-700 rounded-lg transition-colors border border-stone-200 dark:border-zinc-700">
+            <i class="fa-solid fa-ellipsis-vertical text-base"></i>
+          </button>
+
+          <div id="moreMenuDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-stone-200 dark:border-zinc-700 py-1.5 z-50 text-sm">
+            <button id="exportBtn" class="w-full text-left px-4 py-2 hover:bg-stone-100 dark:hover:bg-zinc-700/60 flex items-center gap-2">
+              <i class="fa-solid fa-download text-stone-400"></i> 匯出備份 (JSON)
+            </button>
+            <button id="importBtn" class="w-full text-left px-4 py-2 hover:bg-stone-100 dark:hover:bg-zinc-700/60 flex items-center gap-2">
+              <i class="fa-solid fa-upload text-stone-400"></i> 匯入備份
+            </button>
+            <input type="file" id="importFileInput" accept=".json" class="hidden">
+            <div class="my-1 border-t border-stone-200 dark:border-zinc-700"></div>
+            <button id="fontToggleBtn" class="w-full text-left px-4 py-2 hover:bg-stone-100 dark:hover:bg-zinc-700/60 flex items-center gap-2">
+              <i class="fa-solid fa-font text-stone-400"></i> <span id="fontToggleLabel">切換手寫字體</span>
+            </button>
+            <button id="darkModeToggleBtn" class="w-full text-left px-4 py-2 hover:bg-stone-100 dark:hover:bg-zinc-700/60 flex items-center gap-2">
+              <i class="fa-solid fa-moon text-stone-400" id="darkModeIcon"></i> <span id="darkModeLabel">深色模式</span>
+            </button>
+            <div class="my-1 border-t border-stone-200 dark:border-zinc-700"></div>
+            <button id="clearAllBtn" class="w-full text-left px-4 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center gap-2">
+              <i class="fa-solid fa-trash-can"></i> 清空所有便利貼
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- Color Quick Selector Bar & Note Counter -->
+  <div class="bg-stone-50 dark:bg-zinc-850 border-b border-stone-200 dark:border-zinc-800 px-4 py-2 text-xs">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Color Filter -->
+      <div class="flex items-center gap-2 overflow-x-auto py-0.5">
+        <span class="text-stone-500 dark:text-stone-400 whitespace-nowrap font-medium">顏色篩選：</span>
+        <button data-color-filter="all" class="color-filter-btn active px-2.5 py-1 rounded-md bg-stone-200 dark:bg-zinc-700 text-stone-800 dark:text-stone-200 font-medium">全部</button>
+        
+        <button data-color-filter="yellow" class="color-filter-btn flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> 黃色
+        </button>
+        <button data-color-filter="green" class="color-filter-btn flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-100 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> 綠色
+        </button>
+        <button data-color-filter="blue" class="color-filter-btn flex items-center gap-1 px-2.5 py-1 rounded-md bg-sky-100 dark:bg-sky-900/50 text-sky-900 dark:text-sky-200 border border-sky-300 dark:border-sky-700">
+          <span class="w-2.5 h-2.5 rounded-full bg-sky-400"></span> 藍色
+        </button>
+        <button data-color-filter="pink" class="color-filter-btn flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-100 dark:bg-rose-900/50 text-rose-900 dark:text-rose-200 border border-rose-300 dark:border-rose-700">
+          <span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span> 粉紅
+        </button>
+        <button data-color-filter="purple" class="color-filter-btn flex items-center gap-1 px-2.5 py-1 rounded-md bg-purple-100 dark:bg-purple-900/50 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-700">
+          <span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span> 紫色
+        </button>
+        <button data-color-filter="orange" class="color-filter-btn flex items-center gap-1 px-2.5 py-1 rounded-md bg-orange-100 dark:bg-orange-900/50 text-orange-900 dark:text-orange-200 border border-orange-300 dark:border-orange-700">
+          <span class="w-2.5 h-2.5 rounded-full bg-orange-400"></span> 橘色
+        </button>
+      </div>
+
+      <!-- Stats Bar -->
+      <div class="flex items-center gap-3 text-stone-500 dark:text-stone-400 font-medium">
+        <span><i class="fa-solid fa-layer-group me-1"></i> 便利貼數量：<strong id="noteCount" class="text-stone-800 dark:text-stone-200">0</strong></span>
+        <span class="hidden sm:inline">|</span>
+        <span class="hidden sm:inline text-xs text-stone-400"><i class="fa-solid fa-cloud-arrow-up me-1"></i> 已儲存於 LocalStorage</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Main Board Canvas Container -->
+  <main id="boardCanvas" class="flex-grow p-4 md:p-6 transition-all duration-300 relative min-h-[calc(100vh-120px)] light-corkboard-bg dark:corkboard-bg">
+    
+    <!-- Empty State Prompt -->
+    <div id="emptyState" class="hidden absolute inset-0 flex flex-col items-center justify-center text-center p-6 pointer-events-none">
+      <div class="w-20 h-20 rounded-full bg-amber-100 dark:bg-zinc-800 border-2 border-dashed border-amber-300 dark:border-zinc-600 flex items-center justify-center text-amber-500 mb-4 shadow-sm">
+        <i class="fa-solid fa-note-sticky text-3xl"></i>
+      </div>
+      <h3 class="text-lg font-bold text-stone-700 dark:text-stone-200 mb-1">目前沒有便利貼</h3>
+      <p class="text-sm text-stone-500 dark:text-stone-400 max-w-sm mb-4">點擊右上角的「新增便利貼」按鈕，建立您的第一張工作備忘、待辦事項或靈感筆記！</p>
+      <button id="emptyStateAddBtn" class="pointer-events-auto px-4 py-2 bg-amber-500 hover:bg-amber-600 text-stone-900 font-semibold text-sm rounded-lg shadow-md transition-transform hover:scale-105">
+        <i class="fa-solid fa-plus me-1"></i> 立即新增
+      </button>
+    </div>
+
+    <!-- Notes Container (Grid or Freeform layout) -->
+    <div id="notesContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5 max-w-7xl mx-auto pb-20">
+      <!-- Notes will be dynamically populated here -->
+    </div>
+
+  </main>
+
+  <!-- Deploy to GitHub Pages Modal -->
+  <div id="deployGuideModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-zinc-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-stone-200 dark:border-zinc-700 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-stone-200 dark:border-zinc-700 pb-4 mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center text-xl">
+            <i class="fa-brands fa-github"></i>
+          </div>
+          <div>
+            <h2 class="text-lg font-bold">部署至 GitHub Pages 教學</h2>
+            <p class="text-xs text-stone-500 dark:text-stone-400">只需 3 分鐘，即可免費將此便利貼看板上線公開存取！</p>
+          </div>
+        </div>
+        <button id="closeDeployGuideBtn" class="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 p-2 text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-sm text-stone-700 dark:text-stone-300">
+        
+        <div class="p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl text-amber-900 dark:text-amber-200 text-xs flex gap-2">
+          <i class="fa-solid fa-circle-info text-amber-500 text-base flex-shrink-0 mt-0.5"></i>
+          <div>本專案是完整的<strong>靜態網頁（Single HTML File）</strong>，包含所有 JavaScript、CSS 與 LocalStorage 儲存邏輯，完全不需要建立後端伺服器！</div>
+        </div>
+
+        <ol class="space-y-3 list-decimal list-inside font-medium">
+          <li class="p-3 rounded-lg bg-stone-50 dark:bg-zinc-700/40">
+            <strong class="text-stone-900 dark:text-stone-100">儲存檔案：</strong>
+            <p class="text-xs font-normal text-stone-500 dark:text-stone-400 mt-1 pl-5">將此網頁原始碼儲存為名為 <code class="bg-stone-200 dark:bg-zinc-600 px-1.5 py-0.5 rounded text-amber-600 dark:text-amber-400">index.html</code> 的檔案。</p>
+          </li>
+
+          <li class="p-3 rounded-lg bg-stone-50 dark:bg-zinc-700/40">
+            <strong class="text-stone-900 dark:text-stone-100">建立 GitHub Repository：</strong>
+            <p class="text-xs font-normal text-stone-500 dark:text-stone-400 mt-1 pl-5">前往 <a href="https://github.com/new" target="_blank" class="text-amber-600 dark:text-amber-400 underline">GitHub New Repository</a>，建立一個全新的公開儲存庫（例如: <code class="bg-stone-200 dark:bg-zinc-600 px-1.5 py-0.5 rounded">my-sticky-board</code>）。</p>
+          </li>
+
+          <li class="p-3 rounded-lg bg-stone-50 dark:bg-zinc-700/40">
+            <strong class="text-stone-900 dark:text-stone-100">上傳 index.html：</strong>
+            <p class="text-xs font-normal text-stone-500 dark:text-stone-400 mt-1 pl-5">在剛剛建立的 Repo 中，點擊 "uploading an existing file"，並上傳您剛剛儲存的 <code class="bg-stone-200 dark:bg-zinc-600 px-1.5 py-0.5 rounded">index.html</code> 檔案，點擊 "Commit changes"。</p>
+          </li>
+
+          <li class="p-3 rounded-lg bg-stone-50 dark:bg-zinc-700/40">
+            <strong class="text-stone-900 dark:text-stone-100">開啟 GitHub Pages：</strong>
+            <p class="text-xs font-normal text-stone-500 dark:text-stone-400 mt-1 pl-5">進入 Repository 的 <strong>Settings</strong> ➔ 點擊左側 <strong>Pages</strong> ➔ 在 <strong>Build and deployment / Branch</strong> 選項選擇 <code class="bg-stone-200 dark:bg-zinc-600 px-1.5 py-0.5 rounded">main</code> (或 master) ➔ 點擊 <strong>Save</strong>。</p>
+          </li>
+        </ol>
+
+        <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 text-xs">
+          🎉 等待約 1~2 分鐘後，GitHub 就會提供給您專屬的免費網址（例如：<code class="font-bold underline">https://your-username.github.io/my-sticky-board/</code>）！
+        </div>
+
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button id="closeDeployGuideBtn2" class="px-5 py-2 bg-stone-200 dark:bg-zinc-700 hover:bg-stone-300 dark:hover:bg-zinc-600 text-stone-800 dark:text-stone-200 rounded-lg text-sm font-semibold transition-colors">
+          我知道了
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Confirmation Modal (Replaces window.confirm) -->
+  <div id="confirmModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-zinc-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-stone-200 dark:border-zinc-700 text-center transform transition-all scale-100">
+      <div class="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-500 mx-auto flex items-center justify-center text-xl mb-3">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3 id="confirmTitle" class="text-base font-bold mb-1">確認動作</h3>
+      <p id="confirmMessage" class="text-xs text-stone-500 dark:text-stone-400 mb-5">您確定要執行此操作嗎？</p>
+      
+      <div class="flex items-center justify-center gap-2">
+        <button id="confirmCancelBtn" class="w-full py-2 bg-stone-100 dark:bg-zinc-700 hover:bg-stone-200 dark:hover:bg-zinc-600 text-stone-700 dark:text-stone-200 text-xs font-semibold rounded-lg transition-colors">
+          取消
+        </button>
+        <button id="confirmOkBtn" class="w-full py-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm">
+          確認刪除
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script>
+    // --- APP STATE & CONFIGURATION ---
+    const STORAGE_KEY = 'sticky_notes_app_data_v2';
+    const SETTINGS_KEY = 'sticky_notes_app_settings_v1';
+
+    // Color definitions with Tailwind classes
+    const COLOR_PRESETS = {
+      yellow: {
+        name: '黃色',
+        bg: 'bg-amber-100 dark:bg-amber-900/80',
+        border: 'border-amber-300 dark:border-amber-700',
+        text: 'text-amber-950 dark:text-amber-100',
+        headerBg: 'bg-amber-200/70 dark:bg-amber-800/80',
+        pinColor: 'text-rose-500'
+      },
+      green: {
+        name: '綠色',
+        bg: 'bg-emerald-100 dark:bg-emerald-900/80',
+        border: 'border-emerald-300 dark:border-emerald-700',
+        text: 'text-emerald-950 dark:text-emerald-100',
+        headerBg: 'bg-emerald-200/70 dark:bg-emerald-800/80',
+        pinColor: 'text-emerald-600 dark:text-emerald-400'
+      },
+      blue: {
+        name: '藍色',
+        bg: 'bg-sky-100 dark:bg-sky-900/80',
+        border: 'border-sky-300 dark:border-sky-700',
+        text: 'text-sky-950 dark:text-sky-100',
+        headerBg: 'bg-sky-200/70 dark:bg-sky-800/80',
+        pinColor: 'text-sky-600 dark:text-sky-400'
+      },
+      pink: {
+        name: '粉紅',
+        bg: 'bg-rose-100 dark:bg-rose-900/80',
+        border: 'border-rose-300 dark:border-rose-700',
+        text: 'text-rose-950 dark:text-rose-100',
+        headerBg: 'bg-rose-200/70 dark:bg-rose-800/80',
+        pinColor: 'text-rose-600 dark:text-rose-400'
+      },
+      purple: {
+        name: '紫色',
+        bg: 'bg-purple-100 dark:bg-purple-900/80',
+        border: 'border-purple-300 dark:border-purple-700',
+        text: 'text-purple-950 dark:text-purple-100',
+        headerBg: 'bg-purple-200/70 dark:bg-purple-800/80',
+        pinColor: 'text-purple-600 dark:text-purple-400'
+      },
+      orange: {
+        name: '橘色',
+        bg: 'bg-orange-100 dark:bg-orange-900/80',
+        border: 'border-orange-300 dark:border-orange-700',
+        text: 'text-orange-950 dark:text-orange-100',
+        headerBg: 'bg-orange-200/70 dark:bg-orange-800/80',
+        pinColor: 'text-orange-600 dark:text-orange-400'
+      }
+    };
+
+    let notes = [];
+    let settings = {
+      isDarkMode: false,
+      useHandwritingFont: false,
+      viewMode: 'grid', // 'grid' or 'freeform'
+      currentColorFilter: 'all',
+      searchQuery: ''
+    };
+
+    let confirmCallback = null;
+
+    // Load notes & settings from LocalStorage
+    function loadData() {
+      try {
+        const savedNotes = localStorage.getItem(STORAGE_KEY);
+        if (savedNotes) {
+          notes = JSON.parse(savedNotes);
+        } else {
+          // Default initial sample notes if empty
+          notes = [
+            {
+              id: 'note-' + Date.now() + '-1',
+              title: '💡 歡迎使用便利貼看板！',
+              content: '這是一個單頁面（Single-file）靜態網頁便利貼。\n\n• 您可以隨時點擊內容進行編輯\n• 重新整理或關閉網頁，內容皆不會遺失\n• 支援顏色選擇、釘選固定與檢視切換！',
+              color: 'yellow',
+              isPinned: true,
+              rotation: 'note-rotate-left',
+              createdAt: new Date().toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              position: { x: 20, y: 20 }
+            },
+            {
+              id: 'note-' + Date.now() + '-2',
+              title: '🚀 部署至 GitHub Pages',
+              content: '點擊右上角 GitHub 圖示 了解如何免費將此看板部署上線！\n完全靜態，零成本運作。',
+              color: 'blue',
+              isPinned: false,
+              rotation: 'note-rotate-right',
+              createdAt: new Date().toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              position: { x: 280, y: 30 }
+            },
+            {
+              id: 'note-' + Date.now() + '-3',
+              title: '📝 今日待辦事項',
+              content: '• 完成專案報告\n• 買牛奶與咖啡豆\n• 運動 30 分鐘',
+              color: 'green',
+              isPinned: false,
+              rotation: 'note-rotate-none',
+              createdAt: new Date().toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              position: { x: 540, y: 20 }
+            }
+          ];
+          saveNotesToStorage();
+        }
+
+        const savedSettings = localStorage.getItem(SETTINGS_KEY);
+        if (savedSettings) {
+          settings = { ...settings, ...JSON.parse(savedSettings) };
+        }
+      } catch (e) {
+        console.error('Failed to load data from LocalStorage:', e);
+        showToast('讀取 LocalStorage 資料失敗', 'error');
+      }
+    }
+
+    // Save notes to LocalStorage
+    function saveNotesToStorage() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+        updateNoteCount();
+      } catch (e) {
+        console.error('Failed to save to LocalStorage:', e);
+        showToast('儲存失敗，LocalStorage 可能已滿', 'error');
+      }
+    }
+
+    // Save settings to LocalStorage
+    function saveSettingsToStorage() {
+      try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      } catch (e) {
+        console.error('Failed to save settings:', e);
+      }
+    }
+
+    // DOM Elements
+    const notesContainer = document.getElementById('notesContainer');
+    const emptyState = document.getElementById('emptyState');
+    const noteCountEl = document.getElementById('noteCount');
+    const searchInput = document.getElementById('searchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const addNoteBtn = document.getElementById('addNoteBtn');
+    const emptyStateAddBtn = document.getElementById('emptyStateAddBtn');
+    const viewToggleBtn = document.getElementById('viewToggleBtn');
+    const viewToggleIcon = document.getElementById('viewToggleIcon');
+    const moreMenuBtn = document.getElementById('moreMenuBtn');
+    const moreMenuDropdown = document.getElementById('moreMenuDropdown');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const importFileInput = document.getElementById('importFileInput');
+    const fontToggleBtn = document.getElementById('fontToggleBtn');
+    const fontToggleLabel = document.getElementById('fontToggleLabel');
+    const darkModeToggleBtn = document.getElementById('darkModeToggleBtn');
+    const darkModeIcon = document.getElementById('darkModeIcon');
+    const darkModeLabel = document.getElementById('darkModeLabel');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+    const openDeployGuideBtn = document.getElementById('openDeployGuideBtn');
+    const deployGuideModal = document.getElementById('deployGuideModal');
+    const closeDeployGuideBtn = document.getElementById('closeDeployGuideBtn');
+    const closeDeployGuideBtn2 = document.getElementById('closeDeployGuideBtn2');
+    const confirmModal = document.getElementById('confirmModal');
+    const confirmTitle = document.getElementById('confirmTitle');
+    const confirmMessage = document.getElementById('confirmMessage');
+    const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+    const confirmOkBtn = document.getElementById('confirmOkBtn');
+
+    // Subtle audio effects using Web Audio API
+    function playAudioTone(type) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        if (type === 'add') {
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+          osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.1); // E5
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.15);
+        } else if (type === 'delete') {
+          osc.frequency.setValueAtTime(300, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.1);
+        }
+      } catch (e) {
+        // AudioContext not supported or blocked
+      }
+    }
+
+    // Render Notes
+    function renderNotes() {
+      notesContainer.innerHTML = '';
+
+      // Filter notes based on search query & color filter
+      const filteredNotes = notes.filter(note => {
+        const matchesColor = settings.currentColorFilter === 'all' || note.color === settings.currentColorFilter;
+        const matchesSearch = !settings.searchQuery || 
+          note.title.toLowerCase().includes(settings.searchQuery.toLowerCase()) || 
+          note.content.toLowerCase().includes(settings.searchQuery.toLowerCase());
+        return matchesColor && matchesSearch;
+      });
+
+      // Sort pinned notes to the top
+      filteredNotes.sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+
+      if (filteredNotes.length === 0) {
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+      }
+
+      // Render each note element
+      filteredNotes.forEach(note => {
+        const noteCard = createNoteCardElement(note);
+        notesContainer.appendChild(noteCard);
+      });
+
+      // Apply font style
+      if (settings.useHandwritingFont) {
+        document.body.classList.add('font-handwriting');
+      } else {
+        document.body.classList.remove('font-handwriting');
+      }
+
+      // Apply View Mode (Grid vs Freeform Container)
+      if (settings.viewMode === 'freeform') {
+        notesContainer.className = 'relative w-full min-h-[600px] max-w-7xl mx-auto pb-20';
+      } else {
+        notesContainer.className = 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5 max-w-7xl mx-auto pb-20';
+      }
+
+      updateNoteCount();
+    }
+
+    // Create Note Card DOM Element
+    function createNoteCardElement(note) {
+      const preset = COLOR_PRESETS[note.color] || COLOR_PRESETS.yellow;
+      
+      const card = document.createElement('div');
+      card.dataset.id = note.id;
+      
+      // Card Base Classes
+      let cardClasses = `note-card relative flex flex-col rounded-xl border ${preset.bg} ${preset.border} ${preset.text} shadow-sticky hover:shadow-sticky-hover transition-all duration-200 p-4 `;
+      
+      if (settings.viewMode === 'freeform') {
+        cardClasses += `absolute w-72 min-h-[220px] cursor-grab active:cursor-grabbing `;
+        card.style.left = `${note.position?.x || 20}px`;
+        card.style.top = `${note.position?.y || 20}px`;
+      } else {
+        cardClasses += `w-full min-h-[220px] ${note.rotation || 'note-rotate-none'} `;
+      }
+
+      card.className = cardClasses;
+
+      // Card Header HTML
+      const headerHTML = `
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-black/10 dark:border-white/10 select-none">
+          <!-- Pin button -->
+          <button class="pin-btn p-1 transition-transform hover:scale-125 ${note.isPinned ? preset.pinColor : 'text-stone-400 dark:text-stone-500 hover:text-stone-700'}" title="${note.isPinned ? '取消釘選' : '釘選至最前'}">
+            <i class="fa-solid fa-thumbtack ${note.isPinned ? 'rotate-45' : ''}"></i>
+          </button>
+
+          <!-- Note ID / Timestamp -->
+          <span class="text-[10px] opacity-60 font-mono">${note.createdAt || ''}</span>
+
+          <!-- Actions (Color Pick & Delete) -->
+          <div class="flex items-center gap-1">
+            <!-- Color Picker Popover Button -->
+            <div class="relative group">
+              <button class="p-1 opacity-70 hover:opacity-100 transition-opacity" title="更換便利貼顏色">
+                <i class="fa-solid fa-palette text-xs"></i>
+              </button>
+              <div class="hidden group-hover:flex absolute right-0 top-6 bg-white dark:bg-zinc-800 p-1.5 rounded-lg shadow-xl border border-stone-200 dark:border-zinc-700 gap-1.5 z-50">
+                ${Object.keys(COLOR_PRESETS).map(colorKey => `
+                  <button data-color="${colorKey}" class="color-select-btn w-5 h-5 rounded-full border border-black/20 dark:border-white/20 transition-transform hover:scale-110" style="background-color: ${getColorHex(colorKey)}"></button>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Delete Button -->
+            <button class="delete-btn p-1 opacity-60 hover:opacity-100 text-rose-600 dark:text-rose-400 transition-opacity" title="刪除便利貼">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+        </div>
+      `;
+
+      // Card Content HTML
+      const bodyHTML = `
+        <div class="flex-grow flex flex-col gap-2">
+          <input type="text" value="${escapeHtml(note.title)}" placeholder="輸入標題..." 
+            class="note-title-input w-full bg-transparent font-bold text-base border-b border-transparent hover:border-black/10 dark:hover:border-white/10 focus:border-amber-500 focus:outline-none transition-colors px-0.5 py-0.5">
+          
+          <textarea placeholder="寫下您的想法、備忘或待辦事項..." 
+            class="note-content-input w-full flex-grow bg-transparent text-sm resize-none focus:outline-none leading-relaxed px-0.5 py-0.5 overflow-y-auto min-h-[110px]">${escapeHtml(note.content)}</textarea>
+        </div>
+      `;
+
+      card.innerHTML = headerHTML + bodyHTML;
+
+      // Event Listeners for the card
+      attachCardEventListeners(card, note);
+
+      return card;
+    }
+
+    // Event listeners for a single note card
+    function attachCardEventListeners(card, note) {
+      const titleInput = card.querySelector('.note-title-input');
+      const contentInput = card.querySelector('.note-content-input');
+      const pinBtn = card.querySelector('.pin-btn');
+      const deleteBtn = card.querySelector('.delete-btn');
+      const colorSelectBtns = card.querySelectorAll('.color-select-btn');
+
+      // Title input change
+      titleInput.addEventListener('input', (e) => {
+        note.title = e.target.value;
+        saveNotesToStorage();
+      });
+
+      // Content input change
+      contentInput.addEventListener('input', (e) => {
+        note.content = e.target.value;
+        saveNotesToStorage();
+      });
+
+      // Toggle Pin
+      pinBtn.addEventListener('click', () => {
+        note.isPinned = !note.isPinned;
+        saveNotesToStorage();
+        renderNotes();
+        showToast(note.isPinned ? '已釘選便利貼' : '已取消釘選', 'info');
+      });
+
+      // Delete Note
+      deleteBtn.addEventListener('click', () => {
+        showConfirmModal('確定刪除便利貼？', `要刪除「${note.title || '這張便利貼'}」嗎？此動作無法撤銷。`, () => {
+          notes = notes.filter(n => n.id !== note.id);
+          saveNotesToStorage();
+          playAudioTone('delete');
+          renderNotes();
+          showToast('便利貼已刪除', 'info');
+        });
+      });
+
+      // Change Color
+      colorSelectBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const newColor = e.currentTarget.dataset.color;
+          if (newColor && COLOR_PRESETS[newColor]) {
+            note.color = newColor;
+            saveNotesToStorage();
+            renderNotes();
+          }
+        });
+      });
+
+      // Freeform Drag & Drop functionality
+      if (settings.viewMode === 'freeform') {
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+
+        card.addEventListener('mousedown', (e) => {
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.closest('button')) {
+            return;
+          }
+          isDragging = true;
+          card.classList.add('dragging');
+          startX = e.clientX;
+          startY = e.clientY;
+          initialLeft = card.offsetLeft;
+          initialTop = card.offsetTop;
+
+          const onMouseMove = (moveEvent) => {
+            if (!isDragging) return;
+            const deltaX = moveEvent.clientX - startX;
+            const deltaY = moveEvent.clientY - startY;
+            const newX = Math.max(0, initialLeft + deltaX);
+            const newY = Math.max(0, initialTop + deltaY);
+            
+            card.style.left = `${newX}px`;
+            card.style.top = `${newY}px`;
+            
+            note.position = { x: newX, y: newY };
+          };
+
+          const onMouseUp = () => {
+            if (isDragging) {
+              isDragging = false;
+              card.classList.remove('dragging');
+              saveNotesToStorage();
+              document.removeEventListener('mousemove', onMouseMove);
+              document.removeEventListener('mouseup', onMouseUp);
+            }
+          };
+
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+        });
+      }
+    }
+
+    // Add New Note Function
+    function addNewNote(color = 'yellow') {
+      const rotations = ['note-rotate-left', 'note-rotate-right', 'note-rotate-none'];
+      const randomRotation = rotations[Math.floor(Math.random() * rotations.length)];
+      
+      const newNote = {
+        id: 'note-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        title: '',
+        content: '',
+        color: color,
+        isPinned: false,
+        rotation: randomRotation,
+        createdAt: new Date().toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        position: { x: 30 + (notes.length % 5) * 40, y: 30 + (notes.length % 5) * 40 }
+      };
+
+      notes.unshift(newNote);
+      saveNotesToStorage();
+      playAudioTone('add');
+      renderNotes();
+
+      // Automatically focus new note title
+      setTimeout(() => {
+        const newCard = notesContainer.querySelector(`[data-id="${newNote.id}"] .note-title-input`);
+        if (newCard) newCard.focus();
+      }, 50);
+
+      showToast('已新增便利貼', 'success');
+    }
+
+    // Helper: Map color name to CSS Hex
+    function getColorHex(colorKey) {
+      const hexMap = {
+        yellow: '#fef08a',
+        green: '#a7f3d0',
+        blue: '#bae6fd',
+        pink: '#fbcfe8',
+        purple: '#e9d5ff',
+        orange: '#ffedd5'
+      };
+      return hexMap[colorKey] || '#fef08a';
+    }
+
+    // Escape HTML strings to prevent XSS
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Update Note Counter Badge
+    function updateNoteCount() {
+      if (noteCountEl) {
+        noteCountEl.textContent = notes.length;
+      }
+    }
+
+    // Show Toast Notification
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      
+      let bgClass = 'bg-stone-800 text-white';
+      let icon = 'fa-circle-info';
+
+      if (type === 'success') {
+        bgClass = 'bg-emerald-600 text-white';
+        icon = 'fa-circle-check';
+      } else if (type === 'error') {
+        bgClass = 'bg-rose-600 text-white';
+        icon = 'fa-circle-xmark';
+      }
+
+      toast.className = `flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-xs font-semibold ${bgClass} transition-all transform translate-y-4 opacity-0 pointer-events-auto`;
+      toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeHtml(message)}</span>`;
+
+      const toastContainer = document.getElementById('toastContainer');
+      toastContainer.appendChild(toast);
+
+      // Animate In
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-4', 'opacity-0');
+      });
+
+      // Remove after 2.5s
+      setTimeout(() => {
+        toast.classList.add('translate-y-4', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+
+    // Show Confirmation Modal
+    function showConfirmModal(title, message, callback) {
+      confirmTitle.textContent = title;
+      confirmMessage.textContent = message;
+      confirmCallback = callback;
+      confirmModal.classList.remove('hidden');
+    }
+
+    function hideConfirmModal() {
+      confirmModal.classList.add('hidden');
+      confirmCallback = null;
+    }
+
+    // --- EVENT LISTENERS ---
+    
+    // Add Note Buttons
+    addNoteBtn.addEventListener('click', () => addNewNote());
+    emptyStateAddBtn.addEventListener('click', () => addNewNote());
+
+    // Search Input Logic
+    searchInput.addEventListener('input', (e) => {
+      settings.searchQuery = e.target.value.trim();
+      if (settings.searchQuery) {
+        clearSearchBtn.classList.remove('hidden');
+      } else {
+        clearSearchBtn.classList.add('hidden');
+      }
+      renderNotes();
+    });
+
+    clearSearchBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      settings.searchQuery = '';
+      clearSearchBtn.classList.add('hidden');
+      renderNotes();
+    });
+
+    // Color Filter Buttons
+    document.querySelectorAll('.color-filter-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.color-filter-btn').forEach(b => b.classList.remove('ring-2', 'ring-amber-500', 'font-bold'));
+        const target = e.currentTarget;
+        target.classList.add('ring-2', 'ring-amber-500', 'font-bold');
+        
+        settings.currentColorFilter = target.dataset.colorFilter;
+        renderNotes();
+      });
+    });
+
+    // Toggle View Mode (Grid vs Freeform)
+    viewToggleBtn.addEventListener('click', () => {
+      settings.viewMode = settings.viewMode === 'grid' ? 'freeform' : 'grid';
+      saveSettingsToStorage();
+      
+      if (settings.viewMode === 'freeform') {
+        viewToggleIcon.className = 'fa-solid fa-hand text-base';
+        showToast('已切換至「自由拖曳/釘板模式」', 'info');
+      } else {
+        viewToggleIcon.className = 'fa-solid fa-border-all text-base';
+        showToast('已切換至「網格自動排列模式」', 'info');
+      }
+      renderNotes();
+    });
+
+    // Dropdown Toggle
+    moreMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      moreMenuDropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!moreMenuDropdown.contains(e.target) && e.target !== moreMenuBtn) {
+        moreMenuDropdown.classList.add('hidden');
+      }
+    });
+
+    // Export Data to JSON File
+    exportBtn.addEventListener('click', () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(notes, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `sticky_notes_backup_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      moreMenuDropdown.classList.add('hidden');
+      showToast('備份檔案已下載', 'success');
+    });
+
+    // Import Data from JSON File
+    importBtn.addEventListener('click', () => {
+      importFileInput.click();
+      moreMenuDropdown.classList.add('hidden');
+    });
+
+    importFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const importedNotes = JSON.parse(event.target.result);
+          if (Array.isArray(importedNotes)) {
+            notes = importedNotes;
+            saveNotesToStorage();
+            renderNotes();
+            showToast('備份匯入成功！', 'success');
+          } else {
+            showToast('無效的備份檔案格式', 'error');
+          }
+        } catch (err) {
+          showToast('無法讀取 JSON 檔案', 'error');
+        }
+      };
+      reader.readAsText(file);
+      importFileInput.value = '';
+    });
+
+    // Toggle Font Style
+    fontToggleBtn.addEventListener('click', () => {
+      settings.useHandwritingFont = !settings.useHandwritingFont;
+      saveSettingsToStorage();
+      fontToggleLabel.textContent = settings.useHandwritingFont ? '切換為標準字體' : '切換為手寫字體';
+      moreMenuDropdown.classList.add('hidden');
+      renderNotes();
+    });
+
+    // Dark Mode Toggle
+    function applyDarkMode(isDark) {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+        darkModeIcon.className = 'fa-solid fa-sun text-amber-400';
+        darkModeLabel.textContent = '淺色模式';
+      } else {
+        document.documentElement.classList.remove('dark');
+        darkModeIcon.className = 'fa-solid fa-moon text-stone-400';
+        darkModeLabel.textContent = '深色模式';
+      }
+    }
+
+    darkModeToggleBtn.addEventListener('click', () => {
+      settings.isDarkMode = !settings.isDarkMode;
+      applyDarkMode(settings.isDarkMode);
+      saveSettingsToStorage();
+      moreMenuDropdown.classList.add('hidden');
+    });
+
+    // Clear All Notes
+    clearAllBtn.addEventListener('click', () => {
+      moreMenuDropdown.classList.add('hidden');
+      showConfirmModal('清空所有便利貼？', '您確定要刪除看板上的所有便利貼嗎？此操作無法恢復。', () => {
+        notes = [];
+        saveNotesToStorage();
+        renderNotes();
+        showToast('已清空所有便利貼', 'info');
+      });
+    });
+
+    // Modal Confirmation Action Handlers
+    confirmOkBtn.addEventListener('click', () => {
+      if (confirmCallback) confirmCallback();
+      hideConfirmModal();
+    });
+
+    confirmCancelBtn.addEventListener('click', hideConfirmModal);
+
+    // Deploy Guide Modal Controls
+    openDeployGuideBtn.addEventListener('click', () => deployGuideModal.classList.remove('hidden'));
+    closeDeployGuideBtn.addEventListener('click', () => deployGuideModal.classList.add('hidden'));
+    closeDeployGuideBtn2.addEventListener('click', () => deployGuideModal.classList.add('hidden'));
+
+    // Initialize App
+    window.addEventListener('DOMContentLoaded', () => {
+      loadData();
+      applyDarkMode(settings.isDarkMode);
+      if (settings.useHandwritingFont) {
+        fontToggleLabel.textContent = '切換為標準字體';
+      }
+      renderNotes();
+    });
+  </script>
+</body>
+</html>
